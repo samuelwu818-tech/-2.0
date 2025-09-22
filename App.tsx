@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useReducer, useCallback, FC, useRef } from 'react';
 import { GameStatus, Player as PlayerType, Enemy as EnemyType, GameState, Attack, Vector2, Action, Clone as CloneType } from './types';
 import {
@@ -214,18 +216,24 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       stopAmbiance();
       return createInitialState();
     case 'KEY_DOWN':
+      if (state.status !== GameStatus.Playing) return state;
       return { ...state, keysPressed: { ...state.keysPressed, [action.payload]: true } };
     case 'KEY_UP':
+      if (state.status !== GameStatus.Playing) return state;
       const newKeys = { ...state.keysPressed };
       delete newKeys[action.payload];
       return { ...state, keysPressed: newKeys };
     case 'MOUSE_MOVE':
+      if (state.status !== GameStatus.Playing) return state;
       return { ...state, mousePosition: action.payload };
     case 'TOUCH_MOVE_START':
+      if (state.status !== GameStatus.Playing) return state;
       return { ...state, touchMoveDirection: action.payload };
     case 'TOUCH_MOVE_END':
+      if (state.status !== GameStatus.Playing) return state;
       return { ...state, touchMoveDirection: null };
     case 'CREATE_CLONE': {
+        if (state.status !== GameStatus.Playing) return state;
         if (!state.cloneSpellUnlocked) return state;
         const cost = state.player.maxMp * CLONE_MANA_COST_PERCENT;
         if (state.player.mp < cost) return state;
@@ -252,6 +260,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         };
     }
     case 'START_CHARGING': {
+        if (state.status !== GameStatus.Playing) return state;
         if (state.player.stamina < NORMAL_ATTACK_STAMINA_COST) return state;
         playChargeStart();
         return {
@@ -264,6 +273,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         };
     }
     case 'STOP_CHARGING': {
+        if (state.status !== GameStatus.Playing) return state;
         if (!state.player.isCharging) return state;
 
         const chargeTime = state.player.chargeTimer;
@@ -442,6 +452,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         }
     }
     case 'START_AZURE_CHARGE': {
+      if (state.status !== GameStatus.Playing) return state;
       playAzureChargeStart();
       return {
           ...state,
@@ -453,6 +464,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       };
     }
     case 'STOP_AZURE_CHARGE': {
+        if (state.status !== GameStatus.Playing) return state;
         if (!state.player.isAzureCharging) return state;
 
         const chargeFrames = state.player.azureChargeTimer;
@@ -622,6 +634,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         return { ...state, player: playerWithResetCharge };
     }
     case 'LIGHTNING_STRIKE': {
+      if (state.status !== GameStatus.Playing) return state;
       const cost = state.player.maxMp * LIGHTNING_STRIKE_MANA_COST_PERCENT;
       if (state.player.mp < cost) return state;
 
@@ -712,7 +725,20 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { ...state, isLoadingLore: true, lore: null };
     case 'FETCH_LORE_SUCCESS':
       return { ...state, isLoadingLore: false, lore: action.payload };
+    case 'TOGGLE_PAUSE': {
+      if (state.status === GameStatus.Playing) {
+        stopAmbiance();
+        return { ...state, status: GameStatus.Paused };
+      }
+      if (state.status === GameStatus.Paused) {
+        playAmbiance(state.currentLevel);
+        return { ...state, status: GameStatus.Playing };
+      }
+      return state;
+    }
     case 'TICK': {
+      if (state.status !== GameStatus.Playing) return state;
+
       let { player, enemies, attacks, keysPressed, mousePosition, touchMoveDirection, isMobile, clones } = { ...state };
       
       if (player.footstepCooldown > 0) {
@@ -961,7 +987,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
            attack.position.y > -attack.size.y && attack.position.y < GAME_HEIGHT;
       });
 
-      let newStatus = state.status;
+      // FIX: Explicitly type `newStatus` to `GameStatus` to prevent incorrect type inference
+      // from the guard clause at the beginning of the 'TICK' case. This allows
+      // us to assign other statuses like GameOver or Victory.
+      let newStatus: GameStatus = state.status;
       if (player.hp <= 0) {
           stopAmbiance();
           playGameOver();
@@ -1250,11 +1279,11 @@ const BossHealthBar: FC<{ boss: EnemyType }> = ({ boss }) => (
     </div>
 );
 
-const HUD: FC<{ player: PlayerType; onAskSage: () => void; isLoadingLore: boolean, level: number, wave: number, totalWaves: number, cloneSpellUnlocked: boolean }> = ({ player, onAskSage, isLoadingLore, level, wave, totalWaves, cloneSpellUnlocked }) => (
+const HUD: FC<{ player: PlayerType; onAskSage: () => void; isLoadingLore: boolean; level: number; wave: number; totalWaves: number; cloneSpellUnlocked: boolean; onPause: () => void; }> = ({ player, onAskSage, isLoadingLore, level, wave, totalWaves, cloneSpellUnlocked, onPause }) => (
     <div className="absolute top-0 left-0 w-full p-4 text-white flex justify-between items-start z-20 pointer-events-none">
         <div className="w-1/3 p-4 bg-black/50 rounded-xl border border-yellow-400/30 backdrop-blur-sm">
             <div className="flex justify-between items-baseline">
-                <h2 className="text-2xl text-yellow-400">悟空 (Wukong)</h2>
+                <h2 className="text-2xl text-yellow-400">天命人 (Sky-chosen)</h2>
                  <div className="text-right">
                     <span className="text-lg text-gray-300">關卡 (Level) {level}</span>
                     <br/>
@@ -1280,7 +1309,14 @@ const HUD: FC<{ player: PlayerType; onAskSage: () => void; isLoadingLore: boolea
                 </div>
             )}
         </div>
-        <div className="flex flex-col items-end pointer-events-auto">
+        <div className="flex flex-col items-end gap-2 pointer-events-auto">
+             <button
+                onClick={onPause}
+                className="px-4 py-2 bg-gray-700/70 border border-gray-500 rounded-lg text-lg text-gray-200 hover:bg-gray-600 hover:text-white transition-all duration-200 backdrop-blur-sm"
+                aria-label="Pause Game"
+            >
+                暫停 (Pause)
+            </button>
             <button
                 onClick={onAskSage}
                 disabled={isLoadingLore}
@@ -1305,8 +1341,8 @@ const StartScreen: FC<{ onStart: () => void; isMobile: boolean }> = ({ onStart, 
         }}
     >
         <div className="bg-black/60 p-10 rounded-2xl shadow-2xl text-center backdrop-blur-sm shadow-yellow-500/20">
-            <h1 className="text-7xl font-bold text-yellow-400 animate-title-glow">悟空傳奇</h1>
-            <h2 className="text-4xl text-white mt-2" style={{textShadow: '0 1px 3px rgba(0,0,0,0.5)'}}>Wukong's Quest</h2>
+            <h1 className="text-7xl font-bold text-yellow-400 animate-title-glow">天命人傳奇</h1>
+            <h2 className="text-4xl text-white mt-2" style={{textShadow: '0 1px 3px rgba(0,0,0,0.5)'}}>Sky-chosen's Quest</h2>
             <p className="text-gray-300 mt-6 max-w-lg leading-relaxed">
                  {isMobile
                     ? "使用方向鍵移動。長按攻擊鍵蓄力。點擊藍色寶珠釋放衝擊波，長按可集聚蒼龍閃電。擊敗第二關Boss後解鎖分身術。擊敗所有惡魔以取得勝利。"
@@ -1340,6 +1376,19 @@ const EndScreen: FC<{ status: GameStatus.GameOver | GameStatus.Victory; onRestar
         </button>
     </div>
 );
+
+const PauseScreen: FC<{ onResume: () => void }> = ({ onResume }) => (
+    <div className="absolute inset-0 bg-black/70 flex flex-col justify-center items-center z-40 backdrop-blur-md">
+        <h1 className="text-8xl font-bold text-gray-200">暫停 (Paused)</h1>
+        <button
+            onClick={onResume}
+            className="mt-8 px-10 py-4 bg-gray-600 text-white text-3xl rounded-lg border-2 border-gray-800 hover:bg-gray-500 hover:scale-105 transition-all transform duration-200"
+        >
+            繼續 (Resume)
+        </button>
+    </div>
+);
+
 
 const Background: FC<{ level: number }> = React.memo(({ level }) => {
     if (level !== 1) {
@@ -1396,6 +1445,13 @@ const App: React.FC = () => {
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         const key = e.key.toLowerCase();
+        if (key === 'p') {
+            e.preventDefault();
+            dispatch({ type: 'TOGGLE_PAUSE' });
+            return;
+        }
+        if (state.status !== GameStatus.Playing) return;
+
         if (['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'].includes(key)) {
             dispatch({ type: 'KEY_DOWN', payload: key });
         }
@@ -1407,7 +1463,7 @@ const App: React.FC = () => {
             e.preventDefault();
             dispatch({ type: 'CREATE_CLONE' });
         }
-    }, []);
+    }, [state.status]);
 
     const handleKeyUp = useCallback((e: KeyboardEvent) => {
         dispatch({ type: 'KEY_UP', payload: e.key.toLowerCase() });
@@ -1438,21 +1494,22 @@ const App: React.FC = () => {
     }, []);
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (state.status !== GameStatus.Playing) return;
         if (gameAreaRef.current) {
             const rect = gameAreaRef.current.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             dispatch({ type: 'MOUSE_MOVE', payload: { x, y } });
         }
-    }, []);
+    }, [state.status]);
     
     const handleAskSage = async () => {
         dispatch({ type: 'FETCH_LORE_START' });
         const enemyCount = state.enemies.length;
         const bossExists = state.enemies.some(e => e.type === 'boss');
-        let situation = "The hero stands ready at the beginning of his quest.";
+        let situation = "The hero, the Sky-chosen, stands ready at the beginning of his quest.";
         if (enemyCount > 0) {
-            situation = `The hero faces ${enemyCount} demons in wave ${state.currentWave + 1} of level ${state.currentLevel}. ${bossExists ? 'A powerful boss demon looms among them.' : 'They are minions of a greater evil.'}`;
+            situation = `The Sky-chosen faces ${enemyCount} demons in wave ${state.currentWave + 1} of level ${state.currentLevel}. ${bossExists ? 'A powerful boss demon looms among them.' : 'They are minions of a greater evil.'}`;
         }
         if (state.enemies.length === 0 && state.status === GameStatus.Playing) {
              situation = "The final foe is defeated, and a moment of peace settles on the land.";
@@ -1474,7 +1531,10 @@ const App: React.FC = () => {
             gameDiv.addEventListener('contextmenu', handleContextMenu);
         }
         
-        let gameLoop: number;
+        // FIX: The return type of `setInterval` can be `NodeJS.Timeout` in some environments,
+        // which is not assignable to `number`. Using `ReturnType<typeof setInterval>`
+        // makes the type compatible regardless of the environment.
+        let gameLoop: ReturnType<typeof setInterval>;
         if (state.status === GameStatus.Playing) {
              gameLoop = setInterval(() => {
                 dispatch({ type: 'TICK' });
@@ -1494,8 +1554,8 @@ const App: React.FC = () => {
         };
     }, [state.status, state.isMobile, handleKeyDown, handleKeyUp, handleMouseDown, handleMouseUp, handleMouseMove, handleContextMenu]);
 
-    const boss = state.status === GameStatus.Playing ? state.enemies.find(e => e.type === 'boss') : undefined;
-    const totalWaves = state.status === GameStatus.Playing ? LEVELS[state.currentLevel - 1].waves.length : 0;
+    const boss = state.enemies.find(e => e.type === 'boss');
+    const totalWaves = LEVELS[state.currentLevel - 1]?.waves.length || 0;
 
     return (
         <div className="w-screen h-screen bg-gray-900 flex justify-center items-center overflow-hidden" style={{fontFamily: "'Ma Shan Zheng', cursive"}}>
@@ -1506,11 +1566,21 @@ const App: React.FC = () => {
             >
                 {state.status === GameStatus.StartScreen && <StartScreen onStart={handleStart} isMobile={state.isMobile} />}
                 {(state.status === GameStatus.GameOver || state.status === GameStatus.Victory) && <EndScreen status={state.status} onRestart={() => dispatch({ type: 'RESET_GAME' })} />}
+                {state.status === GameStatus.Paused && <PauseScreen onResume={() => dispatch({ type: 'TOGGLE_PAUSE' })} />}
 
-                {state.status === GameStatus.Playing && (
+                {(state.status === GameStatus.Playing || state.status === GameStatus.Paused) && (
                     <>
                         <Background level={state.currentLevel} />
-                        <HUD player={state.player} onAskSage={handleAskSage} isLoadingLore={state.isLoadingLore} level={state.currentLevel} wave={state.currentWave + 1} totalWaves={totalWaves} cloneSpellUnlocked={state.cloneSpellUnlocked} />
+                        <HUD 
+                            player={state.player} 
+                            onAskSage={handleAskSage} 
+                            isLoadingLore={state.isLoadingLore} 
+                            level={state.currentLevel} 
+                            wave={state.currentWave + 1} 
+                            totalWaves={totalWaves} 
+                            cloneSpellUnlocked={state.cloneSpellUnlocked}
+                            onPause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
+                        />
                         {boss && <BossHealthBar boss={boss} />}
                         <Player player={state.player} />
                         {state.enemies.map(enemy => <Enemy key={enemy.id} enemy={enemy} />)}

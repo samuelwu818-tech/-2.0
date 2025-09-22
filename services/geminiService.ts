@@ -1,16 +1,15 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 
-if (!process.env.API_KEY) {
-  console.error("API_KEY environment variable not set.");
-}
-
+// FIX: Per @google/genai guidelines, the API_KEY environment variable is assumed
+// to be pre-configured and valid. This check is removed to align with that principle.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 export const getGameLore = async (situation: string): Promise<string> => {
   try {
     const prompt = `You are an ancient, wise sage in a mythical Chinese world.
-The hero, Wukong, is in a perilous situation.
+The hero, the Sky-chosen (天命人), is in a perilous situation.
 Describe it with mystical flair, offering a cryptic hint or observation.
 Keep it under 35 words.
 The situation: "${situation}"`;

@@ -6,6 +6,7 @@ export interface Vector2 {
 export enum GameStatus {
   StartScreen,
   Playing,
+  Paused,
   GameOver,
   Victory,
 }
@@ -105,4 +106,5 @@ export type Action =
   | { type: 'RESET_GAME' }
   | { type: 'MOUSE_MOVE'; payload: Vector2 }
   | { type: 'TOUCH_MOVE_START'; payload: Vector2 }
-  | { type: 'TOUCH_MOVE_END' };
+  | { type: 'TOUCH_MOVE_END' }
+  | { type: 'TOGGLE_PAUSE' };
