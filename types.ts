@@ -23,6 +23,7 @@ export interface Player extends Entity {
   mp: number;
   maxMp: number;
   isAttacking: boolean;
+  attackTimer: number;
   attackCooldown: number;
   stamina: number;
   maxStamina: number;

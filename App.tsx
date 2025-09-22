@@ -3,7 +3,7 @@ import { GameStatus, Player as PlayerType, Enemy as EnemyType, GameState, Attack
 import {
   GAME_WIDTH, GAME_HEIGHT, PLAYER_SIZE, PLAYER_SPEED, PLAYER_HP, PLAYER_MP, PLAYER_STAMINA, NORMAL_ATTACK_STAMINA_COST, STAMINA_REGEN_RATE, PLAYER_ATTACK_COOLDOWN,
   PLAYER_INVINCIBILITY_DURATION, NORMAL_ATTACK_SIZE, NORMAL_ATTACK_DURATION, PLAYER_CHARGE_DURATION_FRAMES, PLAYER_CHARGE_STAMINA_COST_PER_FRAME, PLAYER_CHARGING_SPEED_MULTIPLIER, CHARGED_ATTACK_RADIUS,
-  CHARGED_ATTACK_DAMAGE, CHARGED_ATTACK_DURATION, PLAYER_FOOTSTEP_COOLDOWN,
+  CHARGED_ATTACK_DAMAGE, CHARGED_ATTACK_DURATION, PLAYER_FOOTSTEP_COOLDOWN, PLAYER_ATTACK_ANIMATION_DURATION,
   ENEMY_MINION_SIZE, ENEMY_MINION_HP,
   ENEMY_MINION_SPEED, ENEMY_MINION_ATTACK_RANGE, ENEMY_BOSS_SIZE, ENEMY_BOSS_HP, ENEMY_BOSS_SPEED,
   ENEMY_BOSS_ATTACK_RANGE, ENEMY_BAT_SIZE, ENEMY_BAT_HP, ENEMY_BAT_SPEED, ENEMY_BAT_ATTACK_RANGE,
@@ -11,7 +11,7 @@ import {
   LIGHTNING_STRIKE_MANA_COST_PERCENT, LIGHTNING_STRIKE_DAMAGE_PERCENT, LIGHTNING_STRIKE_DURATION,
   AZURE_LIGHTNING_MANA_COST_PERCENT, AZURE_LIGHTNING_CHARGE_DURATION_FRAMES, AZURE_LIGHTNING_BASE_DAMAGE, AZURE_LIGHTNING_CRIT_MULTIPLIER, AZURE_LIGHTNING_DURATION,
   SHORT_PRESS_FRAME_THRESHOLD, MANA_SHOCKWAVE_MANA_COST_PERCENT, MANA_SHOCKWAVE_DAMAGE_PERCENT, MANA_SHOCKWAVE_RADIUS, MANA_SHOCKWAVE_DURATION, BOSS_KILL_HEALTH_RECOVERY_PERCENT,
-  CLONE_MANA_COST_PERCENT, CLONE_LIFESPAN_FRAMES, CLONE_ATTACK_COOLDOWN, CLONE_ATTACK_RANGE, CLONE_SPEED,
+  CLONE_MANA_COST_PERCENT, CLONE_LIFESPAN_FRAMES, CLONE_ATTACK_COOLDOWN, CLONE_ATTACK_RANGE, CLONE_SPEED, ENEMY_KILL_HEALTH_RECOVERY_CHANCE, ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT,
 } from './constants';
 import { getGameLore } from './services/geminiService';
 import { HeartIcon, StaminaIcon, BrainIcon, ManaIcon } from './components/Icons';
@@ -163,6 +163,7 @@ const createInitialState = (): GameState => {
         maxStamina: PLAYER_STAMINA,
         velocity: { x: 0, y: 0 },
         isAttacking: false,
+        attackTimer: 0,
         attackCooldown: 0,
         isInvincible: false,
         invincibilityTimer: 0,
@@ -348,6 +349,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                                 playManaRecovery();
                                 newPlayerMp = Math.min(playerWithResetCharge.maxMp, newPlayerMp + playerWithResetCharge.maxMp * ENEMY_KILL_MANA_RECOVERY_AMOUNT_PERCENT);
                             }
+                            if (Math.random() < ENEMY_KILL_HEALTH_RECOVERY_CHANCE) {
+                                playHealthRecovery();
+                                newPlayerHp = Math.min(playerWithResetCharge.maxHp, newPlayerHp + playerWithResetCharge.maxHp * ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT);
+                            }
                         } else if (oldHp > 0) {
                             playEnemyHit();
                         }
@@ -429,6 +434,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                     ...playerWithResetCharge,
                     attackCooldown: PLAYER_ATTACK_COOLDOWN,
                     stamina: playerWithResetCharge.stamina - NORMAL_ATTACK_STAMINA_COST,
+                    isAttacking: true,
+                    attackTimer: PLAYER_ATTACK_ANIMATION_DURATION,
                 },
                 attacks: [...state.attacks, newAttack],
             };
@@ -494,6 +501,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                         if (Math.random() < ENEMY_KILL_MANA_RECOVERY_CHANCE) {
                             playManaRecovery();
                             newPlayerMp = Math.min(playerWithResetCharge.maxMp, newPlayerMp + playerWithResetCharge.maxMp * ENEMY_KILL_MANA_RECOVERY_AMOUNT_PERCENT);
+                        }
+                        if (Math.random() < ENEMY_KILL_HEALTH_RECOVERY_CHANCE) {
+                            playHealthRecovery();
+                            newPlayerHp = Math.min(playerWithResetCharge.maxHp, newPlayerHp + playerWithResetCharge.maxHp * ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT);
                         }
                     } else if (oldHp > 0) {
                         playEnemyHit();
@@ -573,6 +584,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                         if (Math.random() < ENEMY_KILL_MANA_RECOVERY_CHANCE) {
                             playManaRecovery();
                             newPlayerMp = Math.min(playerWithResetCharge.maxMp, newPlayerMp + playerWithResetCharge.maxMp * ENEMY_KILL_MANA_RECOVERY_AMOUNT_PERCENT);
+                        }
+                        if (Math.random() < ENEMY_KILL_HEALTH_RECOVERY_CHANCE) {
+                            playHealthRecovery();
+                            newPlayerHp = Math.min(playerWithResetCharge.maxHp, newPlayerHp + playerWithResetCharge.maxHp * ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT);
                         }
                     } else if (oldHp > 0) {
                         playEnemyHit();
@@ -658,6 +673,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
               playManaRecovery();
               newPlayerMp = Math.min(state.player.maxMp, newPlayerMp + state.player.maxMp * ENEMY_KILL_MANA_RECOVERY_AMOUNT_PERCENT);
             }
+            if (Math.random() < ENEMY_KILL_HEALTH_RECOVERY_CHANCE) {
+                playHealthRecovery();
+                newPlayerHp = Math.min(state.player.maxHp, newPlayerHp + state.player.maxHp * ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT);
+            }
           } else if (oldHp > 0) {
             playEnemyHit();
           }
@@ -698,6 +717,12 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       
       if (player.footstepCooldown > 0) {
           player.footstepCooldown--;
+      }
+
+      if (player.attackTimer > 0) {
+          player.attackTimer--;
+      } else {
+          player.isAttacking = false;
       }
 
       if (player.isCharging) {
@@ -920,6 +945,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                       playManaRecovery();
                       player.mp = Math.min(player.maxMp, player.mp + player.maxMp * ENEMY_KILL_MANA_RECOVERY_AMOUNT_PERCENT);
                   }
+                  if (Math.random() < ENEMY_KILL_HEALTH_RECOVERY_CHANCE) {
+                      playHealthRecovery();
+                      player.hp = Math.min(player.maxHp, player.hp + player.maxHp * ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT);
+                  }
               } else if (oldHp > 0) {
                   playEnemyHit();
               }
@@ -990,6 +1019,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 const Player: FC<{ player: PlayerType }> = ({ player }) => {
     const isFullyCharged = player.chargeTimer >= PLAYER_CHARGE_DURATION_FRAMES;
     const isAzureFullyCharged = player.azureChargeTimer >= AZURE_LIGHTNING_CHARGE_DURATION_FRAMES;
+    const isMoving = player.velocity.x !== 0 || player.velocity.y !== 0;
+    
     return (
     <div
         style={{
@@ -999,10 +1030,42 @@ const Player: FC<{ player: PlayerType }> = ({ player }) => {
             height: player.size.y,
             transform: player.direction === 'left' ? 'scaleX(-1)' : 'scaleX(1)',
         }}
-        className={`absolute transition-all duration-100 ease-linear z-10 ${player.isInvincible && (Math.floor(player.invincibilityTimer / 10) % 2 === 0) ? 'opacity-50' : 'opacity-100'} ${player.isCharging ? 'shadow-[0_0_20px_5px_rgba(255,255,100,0.7)]' : ''} ${player.isAzureCharging ? 'shadow-[0_0_25px_8px_rgba(100,150,255,0.8)]' : ''}`}
+        className={`absolute transition-opacity duration-100 ease-linear z-10 ${player.isInvincible && (Math.floor(player.invincibilityTimer / 10) % 2 === 0) ? 'opacity-50' : 'opacity-100'}`}
     >
-        <div className="w-full h-full bg-yellow-600 rounded-md border-2 border-yellow-800 shadow-lg"></div>
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 w-4/5 h-2 bg-red-600 border border-yellow-400 rounded-full"></div>
+        {/* Staff (Ruyi Jingu Bang) */}
+        <div 
+            className={`absolute transition-transform duration-100 ease-out ${player.isAttacking ? '-rotate-12 translate-x-4 -translate-y-1' : 'rotate-12'} ${player.isCharging || player.isAzureCharging ? 'shadow-[0_0_10px_2px_rgba(255,255,100,0.9)]' : ''}`}
+            style={{
+                width: '8px',
+                height: '120%',
+                top: '-5px',
+                left: '16px',
+                backgroundColor: '#dc2626', // red
+                borderTop: '5px solid #facc15', // gold
+                borderBottom: '5px solid #facc15', // gold
+                borderRadius: '4px',
+                transformOrigin: 'center 70%',
+            }}
+        />
+
+        {/* Player Body */}
+        <div
+            className={`w-full h-full rounded-md border-2 border-yellow-800 shadow-lg relative transition-transform duration-150 ${player.isCharging || player.isAzureCharging ? 'scale-y-95' : ''} ${isMoving ? 'animate-bob' : ''}`}
+            style={{ 
+                backgroundColor: '#a16207', // A darker, more 'monkey fur' color
+                transformOrigin: 'bottom',
+            }}
+        >
+             {/* Head */}
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-3/4 h-6 bg-orange-200 rounded-t-lg border-2 border-yellow-800">
+                 {/* Golden Headband */}
+                <div className="absolute top-1 left-1/2 -translate-x-1/2 w-4/5 h-1.5 bg-yellow-400 border-y border-yellow-600 rounded-full" />
+            </div>
+        </div>
+        
+        {/* Shadow under the player */}
+        <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-4/5 h-2 bg-black/30 rounded-full blur-sm ${player.isCharging ? 'shadow-[0_0_20px_5px_rgba(255,255,100,0.7)]' : ''} ${player.isAzureCharging ? 'shadow-[0_0_25px_8px_rgba(100,150,255,0.8)]' : ''}`} />
+
         {player.isCharging && (
             <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-full max-w-sm h-2 bg-gray-600 rounded-full border border-gray-400">
                 <div
@@ -1506,6 +1569,13 @@ const App: React.FC = () => {
                 @keyframes twinkle {
                     from { opacity: 0.2; transform: scale(0.8); }
                     to { opacity: 1; transform: scale(1.2); }
+                }
+                @keyframes bob {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-3px); }
+                }
+                .animate-bob {
+                    animation: bob 0.4s ease-in-out infinite;
                 }
             `}</style>
         </div>
