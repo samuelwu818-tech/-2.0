@@ -5,6 +5,7 @@ import { BrainIcon, LightningIcon } from './Icons';
 interface MobileControlsProps {
   dispatch: Dispatch<Action>;
   cloneSpellUnlocked: boolean;
+  celestialJudgmentUnlocked: boolean;
 }
 
 const DPadButton: React.FC<{ onTouchStart: () => void; onTouchEnd: () => void; className?: string; children: React.ReactNode }> = ({ onTouchStart, onTouchEnd, className, children }) => (
@@ -21,7 +22,7 @@ const DPadButton: React.FC<{ onTouchStart: () => void; onTouchEnd: () => void; c
 );
 
 
-export const MobileControls: React.FC<MobileControlsProps> = ({ dispatch, cloneSpellUnlocked }) => {
+export const MobileControls: React.FC<MobileControlsProps> = ({ dispatch, cloneSpellUnlocked, celestialJudgmentUnlocked }) => {
   const handleMove = (direction: Vector2) => {
     dispatch({ type: 'TOUCH_MOVE_START', payload: direction });
   };
@@ -53,6 +54,17 @@ export const MobileControls: React.FC<MobileControlsProps> = ({ dispatch, cloneS
 
       {/* Action Buttons */}
       <div className="absolute bottom-10 right-10 flex items-end gap-4 pointer-events-auto">
+        {celestialJudgmentUnlocked && (
+             <button
+                onTouchStart={(e) => { e.preventDefault(); dispatch({ type: 'CELESTIAL_JUDGMENT' }); }}
+                onMouseDown={(e) => { e.preventDefault(); dispatch({ type: 'CELESTIAL_JUDGMENT' }); }}
+                className="w-20 h-20 bg-blue-600/60 rounded-full flex flex-col justify-center items-center text-white text-lg select-none active:bg-blue-500/80 border-2 border-blue-400"
+                aria-label="Celestial Judgment"
+            >
+                <LightningIcon className="w-8 h-8 text-cyan-200" />
+                <span className="text-sm mt-1">天罰</span>
+            </button>
+        )}
         {cloneSpellUnlocked && (
             <button
               onTouchStart={(e) => { e.preventDefault(); dispatch({ type: 'CREATE_CLONE' }); }}

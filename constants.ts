@@ -52,6 +52,11 @@ export const LIGHTNING_STRIKE_MANA_COST_PERCENT = 0.5;
 export const LIGHTNING_STRIKE_DAMAGE_PERCENT = 0.75;
 export const LIGHTNING_STRIKE_DURATION = 20; // frames
 
+export const CELESTIAL_JUDGMENT_MANA_COST_PERCENT = 0.65;
+export const CELESTIAL_JUDGMENT_DAMAGE_PERCENT = 0.6; // 60% of enemy max HP
+export const CELESTIAL_JUDGMENT_CRIT_MULTIPLIER = 1.2; // Creates a total of 72% max HP damage
+export const CELESTIAL_JUDGMENT_DURATION = 60; // frames for VFX
+
 export const ENEMY_MINION_SIZE = { x: 35, y: 50 };
 export const ENEMY_MINION_HP = 20;
 export const ENEMY_MINION_SPEED = 1.5;

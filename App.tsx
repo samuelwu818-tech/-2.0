@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useEffect, useReducer, useCallback, FC, useRef } from 'react';
 import { GameStatus, Player as PlayerType, Enemy as EnemyType, GameState, Attack, Vector2, Action, Clone as CloneType } from './types';
 import {
@@ -16,17 +12,17 @@ import {
   AZURE_LIGHTNING_MANA_COST_PERCENT, AZURE_LIGHTNING_CHARGE_DURATION_FRAMES, AZURE_LIGHTNING_BASE_DAMAGE, AZURE_LIGHTNING_CRIT_MULTIPLIER, AZURE_LIGHTNING_DURATION,
   SHORT_PRESS_FRAME_THRESHOLD, MANA_SHOCKWAVE_MANA_COST_PERCENT, MANA_SHOCKWAVE_DAMAGE_PERCENT, MANA_SHOCKWAVE_RADIUS, MANA_SHOCKWAVE_DURATION, BOSS_KILL_HEALTH_RECOVERY_PERCENT,
   CLONE_MANA_COST_PERCENT, CLONE_LIFESPAN_FRAMES, CLONE_ATTACK_COOLDOWN, CLONE_ATTACK_RANGE, CLONE_SPEED, ENEMY_KILL_HEALTH_RECOVERY_CHANCE, ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT,
-  ENEMY_BOSS_ATTACK_COOLDOWN, ENEMY_BOSS_PROJECTILE_SPEED, ENEMY_BOSS_PROJECTILE_SIZE, ENEMY_BOSS_PROJECTILE_DAMAGE,
+  ENEMY_BOSS_ATTACK_COOLDOWN, ENEMY_BOSS_PROJECTILE_SPEED, ENEMY_BOSS_PROJECTILE_SIZE, ENEMY_BOSS_PROJECTILE_DAMAGE, CELESTIAL_JUDGMENT_MANA_COST_PERCENT, CELESTIAL_JUDGMENT_DAMAGE_PERCENT, CELESTIAL_JUDGMENT_CRIT_MULTIPLIER, CELESTIAL_JUDGMENT_DURATION,
 } from './constants';
 import { getGameLore } from './services/geminiService';
-import { HeartIcon, StaminaIcon, BrainIcon, ManaIcon } from './components/Icons';
+import { HeartIcon, StaminaIcon, BrainIcon, ManaIcon, LightningIcon } from './components/Icons';
 import { MobileControls } from './components/MobileControls';
 import { 
     initAudio, playPlayerAttack, playEnemyHit, 
     playPlayerHit, playEnemyDefeat, playVictory, playGameOver, playStartGame,
     playManaRecovery, playLightningStrike, playChargeStart, playChargedAttack,
     playAzureChargeStart, playAzureLightningFire, playManaShockwave, playHealthRecovery,
-    playAmbiance, stopAmbiance, playFootstep, playEnemyAttack, playCloneSpell, playCloneAttack, playBossProjectile,
+    playAmbiance, stopAmbiance, playFootstep, playEnemyAttack, playCloneSpell, playCloneAttack, playBossProjectile, playCelestialJudgment,
 } from './services/audioService';
 
 interface Wave {
@@ -239,6 +235,7 @@ const createInitialState = (): GameState => {
       attacks: [],
       clones: [],
       cloneSpellUnlocked: false,
+      celestialJudgmentUnlocked: false,
       keysPressed: {},
       lore: null,
       isLoadingLore: false,
@@ -283,8 +280,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             currentLevel: levelIndex + 1,
             currentWave: 0,
             enemies: spawnEnemiesForWave(levelIndex, 0),
-            // Unlock clone spell if starting on level 3 or 4
             cloneSpellUnlocked: levelIndex >= 2,
+            celestialJudgmentUnlocked: levelIndex >= 3,
         };
     }
     case 'RESET_GAME':
@@ -796,6 +793,94 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         attacks: [...state.attacks, newAttack],
       };
     }
+    case 'CELESTIAL_JUDGMENT': {
+        if (state.status !== GameStatus.Playing) return state;
+        if (!state.celestialJudgmentUnlocked) return state;
+        const cost = state.player.maxMp * CELESTIAL_JUDGMENT_MANA_COST_PERCENT;
+        if (state.player.mp < cost) return state;
+
+        let target: EnemyType | null = null;
+        let minDistance = Infinity;
+
+        const playerCenter = { 
+            x: state.player.position.x + state.player.size.x / 2, 
+            y: state.player.position.y + state.player.size.y / 2 
+        };
+        const targetPoint = state.isMobile ? playerCenter : state.mousePosition;
+
+        state.enemies.forEach(enemy => {
+            if (enemy.hp <= 0) return;
+            const enemyCenter = { x: enemy.position.x + enemy.size.x / 2, y: enemy.position.y + enemy.size.y / 2 };
+            const dx = targetPoint.x - enemyCenter.x;
+            const dy = targetPoint.y - enemyCenter.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < minDistance) {
+                minDistance = distance;
+                target = enemy;
+            }
+        });
+
+        if (!target) return state;
+        
+        playCelestialJudgment();
+        
+        let newPlayerHp = state.player.hp;
+        let newPlayerMp = state.player.mp - cost;
+        
+        const newEnemies = state.enemies.map(enemy => {
+            if (enemy.id === target!.id) {
+                const newEnemy = { ...enemy };
+                const oldHp = newEnemy.hp;
+                const baseDamage = newEnemy.maxHp * CELESTIAL_JUDGMENT_DAMAGE_PERCENT;
+                const totalDamage = baseDamage * CELESTIAL_JUDGMENT_CRIT_MULTIPLIER;
+                newEnemy.hp -= totalDamage;
+                newEnemy.isCritHit = true;
+                newEnemy.critHitTimer = 30; // Longer visual for ultimate
+
+                if (oldHp > 0 && newEnemy.hp <= 0) {
+                    playEnemyDefeat();
+                    if (newEnemy.type === 'boss') {
+                        playHealthRecovery();
+                        newPlayerHp = Math.min(state.player.maxHp, newPlayerHp + state.player.maxHp * BOSS_KILL_HEALTH_RECOVERY_PERCENT);
+                    }
+                    if (Math.random() < ENEMY_KILL_MANA_RECOVERY_CHANCE) {
+                        playManaRecovery();
+                        newPlayerMp = Math.min(state.player.maxMp, newPlayerMp + state.player.maxMp * ENEMY_KILL_MANA_RECOVERY_AMOUNT_PERCENT);
+                    }
+                    if (Math.random() < ENEMY_KILL_HEALTH_RECOVERY_CHANCE) {
+                        playHealthRecovery();
+                        newPlayerHp = Math.min(state.player.maxHp, newPlayerHp + state.player.maxHp * ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT);
+                    }
+                } else if (oldHp > 0) {
+                    playEnemyHit();
+                }
+                return newEnemy;
+            }
+            return enemy;
+        });
+
+        const targetCenter = { 
+            x: target.position.x + target.size.x / 2, 
+            y: target.position.y + target.size.y / 2 
+        };
+
+        const newAttack: Attack = {
+            id: Date.now(),
+            type: 'celestialJudgment',
+            to: targetCenter,
+            duration: CELESTIAL_JUDGMENT_DURATION,
+            position: {x: 0, y: 0},
+            size: {x: 0, y: 0},
+            velocity: {x: 0, y: 0},
+        };
+
+        return {
+            ...state,
+            player: { ...state.player, mp: newPlayerMp, hp: newPlayerHp },
+            enemies: newEnemies,
+            attacks: [...state.attacks, newAttack],
+        };
+    }
     case 'FETCH_LORE_START':
       return { ...state, isLoadingLore: true, lore: null };
     case 'FETCH_LORE_SUCCESS':
@@ -1034,7 +1119,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       attacks = [...attacks, ...newAttacksFromEnemies];
 
       attacks = attacks.filter(attack => {
-        if (attack.type === 'lightning' || attack.type === 'charged' || attack.type === 'azureLightning' || attack.type === 'manaShockwave') {
+        if (['lightning', 'charged', 'azureLightning', 'manaShockwave', 'celestialJudgment'].includes(attack.type)) {
             attack.duration--;
             return attack.duration > 0;
         }
@@ -1133,8 +1218,12 @@ const gameReducer = (state: GameState, action: Action): GameState => {
               if (nextLevelIndex < LEVELS.length) {
                   playAmbiance(state.currentLevel + 1);
                   let cloneSpellUnlocked = state.cloneSpellUnlocked;
+                  let celestialJudgmentUnlocked = state.celestialJudgmentUnlocked;
                   if (state.currentLevel === 2) { // Just completed level 2
                       cloneSpellUnlocked = true;
+                  }
+                  if (state.currentLevel === 3) { // Just completed level 3
+                      celestialJudgmentUnlocked = true;
                   }
                   const newHighestLevel = Math.max(state.highestLevelUnlocked, state.currentLevel + 1);
                   if (newHighestLevel > state.highestLevelUnlocked) {
@@ -1143,6 +1232,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                   return {
                       ...state,
                       cloneSpellUnlocked,
+                      celestialJudgmentUnlocked,
                       currentLevel: state.currentLevel + 1,
                       currentWave: 0,
                       enemies: spawnEnemiesForWave(nextLevelIndex, 0),
@@ -1331,6 +1421,25 @@ const AttackFX: FC<{ attack: Attack }> = ({ attack }) => {
             ></div>
         );
     }
+     if (attack.type === 'celestialJudgment' && attack.to) {
+        const duration = CELESTIAL_JUDGMENT_DURATION;
+        const opacity = Math.sin((Math.PI * (duration - attack.duration)) / duration); // fade in and out
+        return (
+            <div
+                style={{
+                    left: attack.to.x - 50, // 100px width
+                    top: 0,
+                    width: 100,
+                    height: attack.to.y,
+                    opacity: opacity,
+                }}
+                className="absolute pointer-events-none z-20"
+            >
+                <div className="w-full h-full bg-gradient-to-t from-cyan-400 via-blue-500/50 to-transparent animate-pulse"></div>
+                 <div className="absolute bottom-0 w-full h-10 bg-cyan-300 rounded-full blur-2xl"></div>
+            </div>
+        );
+    }
     if (attack.type === 'charged' && attack.from && attack.to) {
         const angle = Math.atan2(attack.to.y - attack.from.y, attack.to.x - attack.from.x) * 180 / Math.PI;
         const distance = Math.sqrt(Math.pow(attack.to.x - attack.from.x, 2) + Math.pow(attack.to.y - attack.from.y, 2));
@@ -1424,7 +1533,7 @@ const BossHealthBar: FC<{ boss: EnemyType }> = ({ boss }) => (
     </div>
 );
 
-const HUD: FC<{ player: PlayerType; onAskSage: () => void; isLoadingLore: boolean; level: number; wave: number; totalWaves: number; cloneSpellUnlocked: boolean; onPause: () => void; }> = ({ player, onAskSage, isLoadingLore, level, wave, totalWaves, cloneSpellUnlocked, onPause }) => (
+const HUD: FC<{ player: PlayerType; onAskSage: () => void; isLoadingLore: boolean; level: number; wave: number; totalWaves: number; cloneSpellUnlocked: boolean; celestialJudgmentUnlocked: boolean; onPause: () => void; }> = ({ player, onAskSage, isLoadingLore, level, wave, totalWaves, cloneSpellUnlocked, celestialJudgmentUnlocked, onPause }) => (
     <div className="absolute top-0 left-0 w-full p-4 text-white flex justify-between items-start z-20 pointer-events-none">
         <div className="w-1/3 p-4 bg-black/50 rounded-xl border border-yellow-400/30 backdrop-blur-sm">
             <div className="flex justify-between items-baseline">
@@ -1447,8 +1556,14 @@ const HUD: FC<{ player: PlayerType; onAskSage: () => void; isLoadingLore: boolea
                 <StaminaIcon className="w-6 h-6 text-yellow-500" />
                 <HealthBar current={player.stamina} max={player.maxStamina} color="bg-yellow-500" />
             </div>
+            {celestialJudgmentUnlocked && (
+                 <div className="mt-4 text-center text-cyan-300 border-t border-cyan-300/20 pt-2">
+                    <p className="font-bold text-lg">天罰 (Celestial Judgment) [F]</p>
+                    <p className="text-sm">消耗 (Cost): {Math.round(player.maxMp * CELESTIAL_JUDGMENT_MANA_COST_PERCENT)} 法力 (MP)</p>
+                </div>
+            )}
             {cloneSpellUnlocked && (
-                 <div className="mt-4 text-center text-cyan-200 border-t border-cyan-200/20 pt-2">
+                 <div className="mt-2 text-center text-cyan-200 border-t border-cyan-200/20 pt-2">
                     <p className="font-bold text-lg">分身術 (Clone Spell) [Q]</p>
                     <p className="text-sm">消耗 (Cost): {Math.round(player.maxMp * CLONE_MANA_COST_PERCENT)} 法力 (MP)</p>
                 </div>
@@ -1647,6 +1762,10 @@ const App: React.FC = () => {
             e.preventDefault();
             dispatch({ type: 'CREATE_CLONE' });
         }
+        if (key === 'f') {
+            e.preventDefault();
+            dispatch({ type: 'CELESTIAL_JUDGMENT' });
+        }
     }, [state.status]);
 
     const handleKeyUp = useCallback((e: KeyboardEvent) => {
@@ -1764,6 +1883,7 @@ const App: React.FC = () => {
                             wave={state.currentWave + 1} 
                             totalWaves={totalWaves} 
                             cloneSpellUnlocked={state.cloneSpellUnlocked}
+                            celestialJudgmentUnlocked={state.celestialJudgmentUnlocked}
                             onPause={() => dispatch({ type: 'TOGGLE_PAUSE' })}
                         />
                         {boss && <BossHealthBar boss={boss} />}
@@ -1782,7 +1902,7 @@ const App: React.FC = () => {
                         <div className="absolute bottom-0 left-0 w-full h-5 bg-stone-700 border-t-4 border-stone-800 z-10"></div>
                     </>
                 )}
-                 {state.status === GameStatus.Playing && state.isMobile && <MobileControls dispatch={dispatch} cloneSpellUnlocked={state.cloneSpellUnlocked} />}
+                 {state.status === GameStatus.Playing && state.isMobile && <MobileControls dispatch={dispatch} cloneSpellUnlocked={state.cloneSpellUnlocked} celestialJudgmentUnlocked={state.celestialJudgmentUnlocked} />}
             </div>
              <style>{`
                 .cursor-crosshair { cursor: crosshair; }

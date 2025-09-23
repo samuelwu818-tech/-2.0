@@ -129,6 +129,17 @@ export const playLightningStrike = () => {
     playSound('sawtooth', 500, 0.2, 0.2);
 };
 
+export const playCelestialJudgment = () => {
+    const context = getAudioContext();
+    if (!context) return;
+    // A deeper, longer crackle than the normal lightning strike
+    playSound('square', 800, 0.3, 0.4); 
+    playSound('sawtooth', 400, 0.5, 0.3);
+    // Add a low frequency boom for impact
+    playSound('sine', 80, 0.6, 0.5);
+};
+
+
 export const playChargeStart = () => {
     playSound('sine', 100, 0.3, 0.2);
 };

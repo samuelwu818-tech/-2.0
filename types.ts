@@ -67,7 +67,7 @@ export interface Attack {
   id: number;
   position: Vector2;
   size: Vector2;
-  type: 'normal' | 'special' | 'manaBurst' | 'lightning' | 'charged' | 'azureLightning' | 'manaShockwave' | 'projectile';
+  type: 'normal' | 'special' | 'manaBurst' | 'lightning' | 'charged' | 'azureLightning' | 'manaShockwave' | 'projectile' | 'celestialJudgment';
   duration: number;
   velocity: Vector2;
   from?: Vector2;
@@ -91,6 +91,7 @@ export interface GameState {
   isMobile: boolean;
   touchMoveDirection: Vector2 | null;
   highestLevelUnlocked: number;
+  celestialJudgmentUnlocked: boolean;
 }
 
 export type Action =
@@ -111,4 +112,5 @@ export type Action =
   | { type: 'MOUSE_MOVE'; payload: Vector2 }
   | { type: 'TOUCH_MOVE_START'; payload: Vector2 }
   | { type: 'TOUCH_MOVE_END' }
-  | { type: 'TOGGLE_PAUSE' };
+  | { type: 'TOGGLE_PAUSE' }
+  | { type: 'CELESTIAL_JUDGMENT' };
