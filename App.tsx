@@ -31,12 +31,14 @@ interface Wave {
 }
 interface Level {
   name: string;
+  description: string;
   waves: Wave[];
 }
 
 const LEVELS: Level[] = [
     {
         name: "Level 1",
+        description: "觀音院 (Guanyin Monastery): Face the cunning Black Bear Demon.",
         waves: [
             { // Wave 1
                 enemies: [
@@ -62,6 +64,7 @@ const LEVELS: Level[] = [
     },
     {
         name: "Level 2",
+        description: "白虎嶺 (White Tiger Ridge): Confront the deceptive White Bone Demon.",
         waves: [
             { // Wave 1
                 enemies: [
@@ -80,6 +83,7 @@ const LEVELS: Level[] = [
     },
     {
         name: "Level 3",
+        description: "黃花觀 (Yellow Flower Temple): Battle the formidable Hundred-Eyed Demon Lord.",
         waves: [
             { // Wave 1
                 enemies: [
@@ -204,14 +208,27 @@ const checkCollision = (a: { position: { x: number, y: number }, size: { x: numb
 const gameReducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
     case 'START_GAME':
-      playAmbiance(1);
       return { 
-          ...createInitialState(), 
-          status: GameStatus.Playing,
-          enemies: spawnEnemiesForWave(0, 0),
-          currentLevel: 1,
-          currentWave: 0
+          ...state, 
+          status: GameStatus.LevelSelection,
       };
+    case 'SELECT_LEVEL': {
+        const levelIndex = action.payload;
+        if (!LEVELS[levelIndex]) return state; // Safety check
+        
+        playAmbiance(levelIndex + 1);
+        playStartGame(); // Re-use start sound for level entry
+
+        return {
+            ...createInitialState(),
+            status: GameStatus.Playing,
+            currentLevel: levelIndex + 1,
+            currentWave: 0,
+            enemies: spawnEnemiesForWave(levelIndex, 0),
+            // Unlock clone spell if starting on level 3
+            cloneSpellUnlocked: levelIndex >= 2,
+        };
+    }
     case 'RESET_GAME':
       stopAmbiance();
       return createInitialState();
@@ -1360,6 +1377,33 @@ const StartScreen: FC<{ onStart: () => void; isMobile: boolean }> = ({ onStart, 
     </div>
 );
 
+const LevelSelectionScreen: FC<{ levels: Level[]; onSelectLevel: (index: number) => void }> = ({ levels, onSelectLevel }) => (
+    <div 
+        className="absolute inset-0 flex flex-col justify-center items-center z-30 p-8" 
+        style={{
+            background: 'radial-gradient(ellipse at center, #1e1b4b 0%, #171717 70%)',
+        }}
+    >
+        <h1 className="text-6xl font-bold text-yellow-400 mb-8 animate-title-glow">選擇戰場</h1>
+        <h2 className="text-3xl text-white -mt-4 mb-12" style={{textShadow: '0 1px 3px rgba(0,0,0,0.5)'}}>Choose Your Battlefield</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
+            {levels.map((level, index) => (
+                <button
+                    key={level.name}
+                    onClick={() => onSelectLevel(index)}
+                    className="group bg-black/50 p-6 rounded-xl border-2 border-yellow-800/60 hover:border-yellow-400 hover:bg-black/70 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-75"
+                >
+                    <h3 className="text-3xl text-yellow-500 group-hover:text-yellow-300 transition-colors duration-300">{level.name}</h3>
+                    <p className="text-gray-300 mt-4 h-16">{level.description}</p>
+                    <span className="mt-6 inline-block text-xl text-white group-hover:text-yellow-200">挑戰 (Challenge) &rarr;</span>
+                </button>
+            ))}
+        </div>
+    </div>
+);
+
+
 const EndScreen: FC<{ status: GameStatus.GameOver | GameStatus.Victory; onRestart: () => void }> = ({ status, onRestart }) => (
     <div className="absolute inset-0 bg-black/70 flex flex-col justify-center items-center z-30 backdrop-blur-md">
         <h1 className="text-8xl font-bold drop-shadow-lg">
@@ -1565,6 +1609,7 @@ const App: React.FC = () => {
                 style={{ width: GAME_WIDTH, height: GAME_HEIGHT }}
             >
                 {state.status === GameStatus.StartScreen && <StartScreen onStart={handleStart} isMobile={state.isMobile} />}
+                {state.status === GameStatus.LevelSelection && <LevelSelectionScreen levels={LEVELS} onSelectLevel={(index) => dispatch({ type: 'SELECT_LEVEL', payload: index })} />}
                 {(state.status === GameStatus.GameOver || state.status === GameStatus.Victory) && <EndScreen status={state.status} onRestart={() => dispatch({ type: 'RESET_GAME' })} />}
                 {state.status === GameStatus.Paused && <PauseScreen onResume={() => dispatch({ type: 'TOGGLE_PAUSE' })} />}
 

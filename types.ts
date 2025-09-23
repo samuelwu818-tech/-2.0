@@ -5,6 +5,7 @@ export interface Vector2 {
 
 export enum GameStatus {
   StartScreen,
+  LevelSelection,
   Playing,
   Paused,
   GameOver,
@@ -95,6 +96,7 @@ export type Action =
   | { type: 'KEY_DOWN'; payload: string }
   | { type: 'KEY_UP'; payload: string }
   | { type: 'START_GAME' }
+  | { type: 'SELECT_LEVEL'; payload: number }
   | { type: 'START_CHARGING' }
   | { type: 'STOP_CHARGING' }
   | { type: 'START_AZURE_CHARGE' }
