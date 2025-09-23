@@ -89,6 +89,7 @@ export interface GameState {
   currentWave: number;
   isMobile: boolean;
   touchMoveDirection: Vector2 | null;
+  highestLevelUnlocked: number;
 }
 
 export type Action =

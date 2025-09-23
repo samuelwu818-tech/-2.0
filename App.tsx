@@ -155,6 +155,8 @@ const spawnEnemiesForWave = (levelIndex: number, waveIndex: number): EnemyType[]
 
 const createInitialState = (): GameState => {
     const isMobile = typeof window !== 'undefined' && /Android|BlackBerry|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+    const savedLevel = localStorage.getItem('highestLevelUnlocked');
+    const highestLevelUnlocked = savedLevel ? parseInt(savedLevel, 10) : 1;
     return {
       status: GameStatus.StartScreen,
       player: {
@@ -193,6 +195,7 @@ const createInitialState = (): GameState => {
       currentWave: 0,
       isMobile,
       touchMoveDirection: null,
+      highestLevelUnlocked,
     };
 };
 
@@ -214,13 +217,16 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       };
     case 'SELECT_LEVEL': {
         const levelIndex = action.payload;
-        if (!LEVELS[levelIndex]) return state; // Safety check
+        if (!LEVELS[levelIndex] || levelIndex + 1 > state.highestLevelUnlocked) return state; // Safety check & unlock check
         
         playAmbiance(levelIndex + 1);
         playStartGame(); // Re-use start sound for level entry
 
+        const initialGameState = createInitialState();
+
         return {
-            ...createInitialState(),
+            ...initialGameState,
+            highestLevelUnlocked: state.highestLevelUnlocked, // Preserve unlocked progress
             status: GameStatus.Playing,
             currentLevel: levelIndex + 1,
             currentWave: 0,
@@ -1004,10 +1010,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
            attack.position.y > -attack.size.y && attack.position.y < GAME_HEIGHT;
       });
 
-      // FIX: Explicitly type `newStatus` to `GameStatus` to prevent incorrect type inference
-      // from the guard clause at the beginning of the 'TICK' case. This allows
-      // us to assign other statuses like GameOver or Victory.
       let newStatus: GameStatus = state.status;
+      let finalHighestLevel = state.highestLevelUnlocked;
       if (player.hp <= 0) {
           stopAmbiance();
           playGameOver();
@@ -1033,6 +1037,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                   if (state.currentLevel === 2) { // Just completed level 2
                       cloneSpellUnlocked = true;
                   }
+                  const newHighestLevel = Math.max(state.highestLevelUnlocked, state.currentLevel + 1);
+                  if (newHighestLevel > state.highestLevelUnlocked) {
+                      localStorage.setItem('highestLevelUnlocked', newHighestLevel.toString());
+                  }
                   return {
                       ...state,
                       cloneSpellUnlocked,
@@ -1046,6 +1054,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                       },
                       attacks: [],
                       clones: [],
+                      highestLevelUnlocked: newHighestLevel,
                   };
               } else {
                   stopAmbiance();
@@ -1055,7 +1064,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           }
       }
 
-      return { ...state, player, enemies: enemies.filter(e=>e.hp > 0), attacks, clones, status: newStatus };
+      if (newStatus === GameStatus.Victory && state.status === GameStatus.Playing) {
+          finalHighestLevel = Math.max(state.highestLevelUnlocked, LEVELS.length + 1);
+          if (finalHighestLevel > state.highestLevelUnlocked) {
+              localStorage.setItem('highestLevelUnlocked', finalHighestLevel.toString());
+          }
+      }
+
+      return { ...state, player, enemies: enemies.filter(e=>e.hp > 0), attacks, clones, status: newStatus, highestLevelUnlocked: finalHighestLevel };
     }
     default:
       return state;
@@ -1377,7 +1393,7 @@ const StartScreen: FC<{ onStart: () => void; isMobile: boolean }> = ({ onStart, 
     </div>
 );
 
-const LevelSelectionScreen: FC<{ levels: Level[]; onSelectLevel: (index: number) => void }> = ({ levels, onSelectLevel }) => (
+const LevelSelectionScreen: FC<{ levels: Level[]; onSelectLevel: (index: number) => void; highestLevelUnlocked: number; }> = ({ levels, onSelectLevel, highestLevelUnlocked }) => (
     <div 
         className="absolute inset-0 flex flex-col justify-center items-center z-30 p-8" 
         style={{
@@ -1388,17 +1404,29 @@ const LevelSelectionScreen: FC<{ levels: Level[]; onSelectLevel: (index: number)
         <h2 className="text-3xl text-white -mt-4 mb-12" style={{textShadow: '0 1px 3px rgba(0,0,0,0.5)'}}>Choose Your Battlefield</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
-            {levels.map((level, index) => (
-                <button
-                    key={level.name}
-                    onClick={() => onSelectLevel(index)}
-                    className="group bg-black/50 p-6 rounded-xl border-2 border-yellow-800/60 hover:border-yellow-400 hover:bg-black/70 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-75"
-                >
-                    <h3 className="text-3xl text-yellow-500 group-hover:text-yellow-300 transition-colors duration-300">{level.name}</h3>
-                    <p className="text-gray-300 mt-4 h-16">{level.description}</p>
-                    <span className="mt-6 inline-block text-xl text-white group-hover:text-yellow-200">挑戰 (Challenge) &rarr;</span>
-                </button>
-            ))}
+            {levels.map((level, index) => {
+                const isUnlocked = (index + 1) <= highestLevelUnlocked;
+                return (
+                    <button
+                        key={level.name}
+                        onClick={() => { if (isUnlocked) onSelectLevel(index); }}
+                        disabled={!isUnlocked}
+                        className={`group bg-black/50 p-6 rounded-xl border-2 transition-all duration-300 transform focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-75 ${
+                            isUnlocked 
+                                ? 'border-yellow-800/60 hover:border-yellow-400 hover:bg-black/70 hover:scale-105' 
+                                : 'border-gray-700/60 opacity-50 cursor-not-allowed'
+                        }`}
+                    >
+                        <h3 className={`text-3xl transition-colors duration-300 ${isUnlocked ? 'text-yellow-500 group-hover:text-yellow-300' : 'text-gray-500'}`}>
+                            {level.name}
+                        </h3>
+                        <p className="text-gray-300 mt-4 h-16">{level.description}</p>
+                        <span className={`mt-6 inline-block text-xl ${isUnlocked ? 'text-white group-hover:text-yellow-200' : 'text-gray-600'}`}>
+                            {isUnlocked ? '挑戰 (Challenge) →' : '鎖定 (Locked)'}
+                        </span>
+                    </button>
+                );
+            })}
         </div>
     </div>
 );
@@ -1609,7 +1637,7 @@ const App: React.FC = () => {
                 style={{ width: GAME_WIDTH, height: GAME_HEIGHT }}
             >
                 {state.status === GameStatus.StartScreen && <StartScreen onStart={handleStart} isMobile={state.isMobile} />}
-                {state.status === GameStatus.LevelSelection && <LevelSelectionScreen levels={LEVELS} onSelectLevel={(index) => dispatch({ type: 'SELECT_LEVEL', payload: index })} />}
+                {state.status === GameStatus.LevelSelection && <LevelSelectionScreen levels={LEVELS} onSelectLevel={(index) => dispatch({ type: 'SELECT_LEVEL', payload: index })} highestLevelUnlocked={state.highestLevelUnlocked} />}
                 {(state.status === GameStatus.GameOver || state.status === GameStatus.Victory) && <EndScreen status={state.status} onRestart={() => dispatch({ type: 'RESET_GAME' })} />}
                 {state.status === GameStatus.Paused && <PauseScreen onResume={() => dispatch({ type: 'TOGGLE_PAUSE' })} />}
 
