@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useEffect, useReducer, useCallback, FC, useRef } from 'react';
 import { GameStatus, Player as PlayerType, Enemy as EnemyType, GameState, Attack, Vector2, Action, Clone as CloneType } from './types';
 import {
@@ -14,6 +16,7 @@ import {
   AZURE_LIGHTNING_MANA_COST_PERCENT, AZURE_LIGHTNING_CHARGE_DURATION_FRAMES, AZURE_LIGHTNING_BASE_DAMAGE, AZURE_LIGHTNING_CRIT_MULTIPLIER, AZURE_LIGHTNING_DURATION,
   SHORT_PRESS_FRAME_THRESHOLD, MANA_SHOCKWAVE_MANA_COST_PERCENT, MANA_SHOCKWAVE_DAMAGE_PERCENT, MANA_SHOCKWAVE_RADIUS, MANA_SHOCKWAVE_DURATION, BOSS_KILL_HEALTH_RECOVERY_PERCENT,
   CLONE_MANA_COST_PERCENT, CLONE_LIFESPAN_FRAMES, CLONE_ATTACK_COOLDOWN, CLONE_ATTACK_RANGE, CLONE_SPEED, ENEMY_KILL_HEALTH_RECOVERY_CHANCE, ENEMY_KILL_HEALTH_RECOVERY_AMOUNT_PERCENT,
+  ENEMY_BOSS_ATTACK_COOLDOWN, ENEMY_BOSS_PROJECTILE_SPEED, ENEMY_BOSS_PROJECTILE_SIZE, ENEMY_BOSS_PROJECTILE_DAMAGE,
 } from './constants';
 import { getGameLore } from './services/geminiService';
 import { HeartIcon, StaminaIcon, BrainIcon, ManaIcon } from './components/Icons';
@@ -23,7 +26,7 @@ import {
     playPlayerHit, playEnemyDefeat, playVictory, playGameOver, playStartGame,
     playManaRecovery, playLightningStrike, playChargeStart, playChargedAttack,
     playAzureChargeStart, playAzureLightningFire, playManaShockwave, playHealthRecovery,
-    playAmbiance, stopAmbiance, playFootstep, playEnemyAttack, playCloneSpell, playCloneAttack,
+    playAmbiance, stopAmbiance, playFootstep, playEnemyAttack, playCloneSpell, playCloneAttack, playBossProjectile,
 } from './services/audioService';
 
 interface Wave {
@@ -135,6 +138,55 @@ const LEVELS: Level[] = [
                 ]
             }
         ]
+    },
+    {
+        name: "Level 4",
+        description: "黃風嶺 (Yellow Wind Ridge): Challenge the mighty Great Sage of Locust Wind.",
+        waves: [
+            // Waves 1-9 build up difficulty
+            // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+            { enemies: Array.from({ length: 4 }).map((_, i) => ({ type: 'minion' as const, position: { x: 150 + i * 150, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED }))},
+            { enemies: [
+                { type: 'minion', position: { x: 100, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED },
+                { type: 'minion', position: { x: 700, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED },
+                { type: 'bat', position: { x: 250, y: GAME_HEIGHT / 2 - 50 }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP, maxHp: ENEMY_BAT_HP, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED },
+                { type: 'bat', position: { x: 550, y: GAME_HEIGHT / 2 - 50 }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP, maxHp: ENEMY_BAT_HP, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED },
+            ]},
+            // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+            { enemies: Array.from({ length: 6 }).map((_, i) => ({ type: 'bat' as const, position: { x: 150 + i * 100, y: 100 + (i % 2 * 100) }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP, maxHp: ENEMY_BAT_HP, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED * 1.1 }))},
+            // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+            { enemies: Array.from({ length: 6 }).map((_, i) => ({ type: 'minion' as const, position: { x: 100 + i * 110, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP * 1.2, maxHp: ENEMY_MINION_HP * 1.2, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED }))},
+            { enemies: [
+                // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+                ...Array.from({ length: 4 }).map((_, i) => ({ type: 'minion' as const, position: { x: 200 + i * 100, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED * 1.2 })),
+                // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+                ...Array.from({ length: 4 }).map((_, i) => ({ type: 'bat' as const, position: { x: 250 + i * 100, y: 150 }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP, maxHp: ENEMY_BAT_HP, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED * 1.2 })),
+            ]},
+            { enemies: [
+                { type: 'minion', position: { x: 100, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED },
+                { type: 'minion', position: { x: 150, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED },
+                { type: 'minion', position: { x: 650, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED },
+                { type: 'minion', position: { x: 700, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED },
+            ]},
+            // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+            { enemies: Array.from({ length: 8 }).map((_, i) => ({ type: 'bat' as const, position: { x: 100 + i * 85, y: 120 + (i % 3 * 50) }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP, maxHp: ENEMY_BAT_HP, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED * 1.3 }))},
+            // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+            { enemies: Array.from({ length: 8 }).map((_, i) => ({ type: 'minion' as const, position: { x: 100 + i * 85, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP, maxHp: ENEMY_MINION_HP, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED * 1.1 }))},
+            { enemies: [
+                // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+                ...Array.from({ length: 4 }).map((_, i) => ({ type: 'minion' as const, position: { x: 100 + i*50, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP * 1.5, maxHp: ENEMY_MINION_HP * 1.5, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED * 1.3 })),
+                // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+                ...Array.from({ length: 4 }).map((_, i) => ({ type: 'minion' as const, position: { x: 550 + i*50, y: GAME_HEIGHT - ENEMY_MINION_SIZE.y - 20 }, size: ENEMY_MINION_SIZE, hp: ENEMY_MINION_HP * 1.5, maxHp: ENEMY_MINION_HP * 1.5, attackRange: ENEMY_MINION_ATTACK_RANGE, speed: ENEMY_MINION_SPEED * 1.3 })),
+                // FIX: Add 'as const' to ensure the 'type' property is inferred as a literal type, not a generic string.
+                ...Array.from({ length: 6 }).map((_, i) => ({ type: 'bat' as const, position: { x: 200 + i*80, y: 100 }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP * 1.5, maxHp: ENEMY_BAT_HP * 1.5, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED * 1.4 })),
+            ]},
+            // Wave 10: Boss
+            { enemies: [
+                { type: 'boss', name: '蝗瘋大聖 (Great Sage of Locust Wind)', position: { x: GAME_WIDTH / 2 - ENEMY_BOSS_SIZE.x / 2, y: GAME_HEIGHT - ENEMY_BOSS_SIZE.y - 20 }, size: ENEMY_BOSS_SIZE, hp: ENEMY_BOSS_HP * 3.5, maxHp: ENEMY_BOSS_HP * 3.5, attackRange: ENEMY_BOSS_ATTACK_RANGE * 1.5, speed: ENEMY_BOSS_SPEED * 1.4, attackCooldown: 0 },
+                { type: 'bat', position: { x: 100, y: 100 }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP * 3, maxHp: ENEMY_BAT_HP * 3, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED * 1.5 },
+                { type: 'bat', position: { x: 700, y: 100 }, size: ENEMY_BAT_SIZE, hp: ENEMY_BAT_HP * 3, maxHp: ENEMY_BAT_HP * 3, attackRange: ENEMY_BAT_ATTACK_RANGE, speed: ENEMY_BAT_SPEED * 1.5 },
+            ]},
+        ]
     }
 ];
 
@@ -231,7 +283,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             currentLevel: levelIndex + 1,
             currentWave: 0,
             enemies: spawnEnemiesForWave(levelIndex, 0),
-            // Unlock clone spell if starting on level 3
+            // Unlock clone spell if starting on level 3 or 4
             cloneSpellUnlocked: levelIndex >= 2,
         };
     }
@@ -904,9 +956,41 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       else player.isInvincible = false;
 
       let livingEnemies = enemies.filter(e => e.hp > 0);
+      let newAttacksFromEnemies: Attack[] = [];
 
       enemies = enemies.map(enemy => {
           if (enemy.hp <= 0) return enemy;
+
+          // Boss Ranged Attack Logic
+          if (enemy.name === '蝗瘋大聖 (Great Sage of Locust Wind)') {
+              if (enemy.attackCooldown !== undefined && enemy.attackCooldown > 0) {
+                  enemy.attackCooldown--;
+              } else if (enemy.attackCooldown === 0) {
+                  playBossProjectile();
+                  const bossCenter = { x: enemy.position.x + enemy.size.x / 2, y: enemy.position.y + enemy.size.y / 2 };
+                  const playerCenter = { x: player.position.x + player.size.x / 2, y: player.position.y + player.size.y / 2 };
+                  const dx = playerCenter.x - bossCenter.x;
+                  const dy = playerCenter.y - bossCenter.y;
+                  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                  const projectileVelocity = {
+                      x: (dx / dist) * ENEMY_BOSS_PROJECTILE_SPEED,
+                      y: (dy / dist) * ENEMY_BOSS_PROJECTILE_SPEED,
+                  };
+
+                  const newProjectile: Attack = {
+                      id: Date.now() + Math.random(),
+                      type: 'projectile',
+                      position: { x: bossCenter.x - ENEMY_BOSS_PROJECTILE_SIZE.x / 2, y: bossCenter.y - ENEMY_BOSS_PROJECTILE_SIZE.y / 2 },
+                      size: ENEMY_BOSS_PROJECTILE_SIZE,
+                      velocity: projectileVelocity,
+                      duration: 300, // 5 seconds lifespan
+                  };
+                  newAttacksFromEnemies.push(newProjectile);
+                  enemy.attackCooldown = ENEMY_BOSS_ATTACK_COOLDOWN;
+              }
+          }
+
           const dx = player.position.x - enemy.position.x;
           const dy = player.position.y - enemy.position.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -946,6 +1030,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           }
           return enemy;
       });
+      
+      attacks = [...attacks, ...newAttacksFromEnemies];
 
       attacks = attacks.filter(attack => {
         if (attack.type === 'lightning' || attack.type === 'charged' || attack.type === 'azureLightning' || attack.type === 'manaShockwave') {
@@ -956,6 +1042,19 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         attack.position.x += attack.velocity.x;
         attack.position.y += attack.velocity.y;
         attack.duration--;
+
+        if (attack.type === 'projectile') {
+             if (!player.isInvincible && checkCollision(player, attack)) {
+                player.hp -= ENEMY_BOSS_PROJECTILE_DAMAGE;
+                player.consecutiveHits = 0;
+                if (player.hp > 0) {
+                    playPlayerHit();
+                }
+                player.isInvincible = true;
+                player.invincibilityTimer = PLAYER_INVINCIBILITY_DURATION;
+                return false; // Projectile is consumed on hit
+            }
+        }
 
         if (attack.type === 'normal') {
           enemies = enemies.map(enemy => {
@@ -1016,7 +1115,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           stopAmbiance();
           playGameOver();
           newStatus = GameStatus.GameOver;
-      } else if (livingEnemies.length === 0) {
+      } else if (enemies.filter(e => e.hp > 0).length === 0) { // Check against the updated enemies array
           const currentLevelData = LEVELS[state.currentLevel - 1];
           const nextWaveIndex = state.currentWave + 1;
           
@@ -1071,7 +1170,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           }
       }
 
-      return { ...state, player, enemies: enemies.filter(e=>e.hp > 0), attacks, clones, status: newStatus, highestLevelUnlocked: finalHighestLevel };
+      return { ...state, player, enemies, attacks, clones, status: newStatus, highestLevelUnlocked: finalHighestLevel };
     }
     default:
       return state;
@@ -1192,6 +1291,19 @@ const Enemy: FC<{ enemy: EnemyType }> = ({ enemy }) => {
 };
 
 const AttackFX: FC<{ attack: Attack }> = ({ attack }) => {
+    if (attack.type === 'projectile') {
+        return (
+            <div
+                style={{
+                    left: attack.position.x,
+                    top: attack.position.y,
+                    width: attack.size.x,
+                    height: attack.size.y,
+                }}
+                className="absolute bg-yellow-600 rounded-full shadow-[0_0_10px_2px_rgba(234,179,8,0.7)] animate-pulse"
+            ></div>
+        );
+    }
     if (attack.type === 'normal') {
         const attackColor = attack.source === 'clone' ? 'bg-cyan-300/50' : 'bg-yellow-300/50';
         return (
@@ -1403,7 +1515,7 @@ const LevelSelectionScreen: FC<{ levels: Level[]; onSelectLevel: (index: number)
         <h1 className="text-6xl font-bold text-yellow-400 mb-8 animate-title-glow">選擇戰場</h1>
         <h2 className="text-3xl text-white -mt-4 mb-12" style={{textShadow: '0 1px 3px rgba(0,0,0,0.5)'}}>Choose Your Battlefield</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 w-full max-w-6xl">
             {levels.map((level, index) => {
                 const isUnlocked = (index + 1) <= highestLevelUnlocked;
                 return (
@@ -1626,7 +1738,7 @@ const App: React.FC = () => {
         };
     }, [state.status, state.isMobile, handleKeyDown, handleKeyUp, handleMouseDown, handleMouseUp, handleMouseMove, handleContextMenu]);
 
-    const boss = state.enemies.find(e => e.type === 'boss');
+    const boss = state.enemies.find(e => e.type === 'boss' && e.hp > 0);
     const totalWaves = LEVELS[state.currentLevel - 1]?.waves.length || 0;
 
     return (
@@ -1656,7 +1768,7 @@ const App: React.FC = () => {
                         />
                         {boss && <BossHealthBar boss={boss} />}
                         <Player player={state.player} />
-                        {state.enemies.map(enemy => <Enemy key={enemy.id} enemy={enemy} />)}
+                        {state.enemies.filter(enemy => enemy.hp > 0).map(enemy => <Enemy key={enemy.id} enemy={enemy} />)}
                         {state.clones.map(clone => <Clone key={clone.id} clone={clone} />)}
                         {state.attacks.map(attack => <AttackFX key={attack.id} attack={attack} />)}
                         

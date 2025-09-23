@@ -55,45 +55,16 @@ export const playEnemyAttack = (type: 'minion' | 'boss' | 'bat') => {
     }
 };
 
+export const playBossProjectile = () => {
+    playSound('sawtooth', 300, 0.2, 0.3);
+};
+
 export const playAmbiance = (level: number) => {
-    const context = getAudioContext();
-    if (!context || context.state === 'suspended') return;
-
-    if (ambianceNodes) {
-        stopAmbiance();
-    }
-    
-    // Only play ambiance for level 1
-    if (level !== 1) {
-        return;
-    }
-
-    const freq = 60; // Low, calm hum for level 1
-    const vol = 0.08;
-    const type: OscillatorType = 'sine';
-
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(freq, context.currentTime);
-    oscillator.connect(gainNode);
-    
-    gainNode.connect(context.destination);
-    gainNode.gain.setValueAtTime(0, context.currentTime);
-    gainNode.gain.linearRampToValueAtTime(vol, context.currentTime + 1.5); // Fade in slowly
-
-    oscillator.start();
-    ambianceNodes = { oscillator, gain: gainNode };
+  // All background sound effects have been removed as per user request.
 };
 
 export const stopAmbiance = () => {
-    const context = getAudioContext();
-    if (!context || !ambianceNodes) return;
-    
-    ambianceNodes.gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.5);
-    ambianceNodes.oscillator.stop(context.currentTime + 0.5);
-    ambianceNodes = null;
+  // All background sound effects have been removed as per user request.
 };
 
 

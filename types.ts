@@ -50,6 +50,7 @@ export interface Enemy extends Entity {
   hitTimer: number;
   isCritHit: boolean;
   critHitTimer: number;
+  attackCooldown?: number;
 }
 
 export interface Clone {
@@ -66,7 +67,7 @@ export interface Attack {
   id: number;
   position: Vector2;
   size: Vector2;
-  type: 'normal' | 'special' | 'manaBurst' | 'lightning' | 'charged' | 'azureLightning' | 'manaShockwave';
+  type: 'normal' | 'special' | 'manaBurst' | 'lightning' | 'charged' | 'azureLightning' | 'manaShockwave' | 'projectile';
   duration: number;
   velocity: Vector2;
   from?: Vector2;

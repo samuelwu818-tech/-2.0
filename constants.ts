@@ -66,3 +66,7 @@ export const ENEMY_BOSS_SIZE = { x: 80, y: 100 };
 export const ENEMY_BOSS_HP = 200;
 export const ENEMY_BOSS_SPEED = 1;
 export const ENEMY_BOSS_ATTACK_RANGE = 300;
+export const ENEMY_BOSS_ATTACK_COOLDOWN = 120; // 2 seconds at 60fps
+export const ENEMY_BOSS_PROJECTILE_SIZE = { x: 20, y: 20 };
+export const ENEMY_BOSS_PROJECTILE_SPEED = 5;
+export const ENEMY_BOSS_PROJECTILE_DAMAGE = 15;
